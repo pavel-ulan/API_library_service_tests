@@ -1,7 +1,6 @@
 package com.qic.library.tests.framework.client;
 
 import com.qic.library.tests.framework.http.Json;
-import com.qic.library.tests.framework.model.Book;
 import com.qic.library.tests.framework.model.BorrowResponse;
 import io.restassured.filter.Filter;
 import io.restassured.filter.FilterContext;
@@ -35,9 +34,7 @@ public class InventoryTracker implements Filter {
             String path = URI.create(request.getURI()).getPath();
             if (path.endsWith("/books/borrow")) {
                 BorrowResponse body = Json.read(response.asString(), BorrowResponse.class);
-                for (Book book : body.borrowed()) {
-                    outstanding.merge(book.id(), 1, Integer::sum);
-                }
+                outstanding.merge(body.borrowed().id(), 1, Integer::sum);
             } else {
                 Matcher matcher = RETURN_PATH.matcher(path);
                 if (matcher.matches()) {

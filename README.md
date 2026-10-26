@@ -9,8 +9,8 @@ Automated API tests for the [Library API](https://github.com/pavel-ulan/API_libr
 | Area | Test class | Checks |
 |---|---|---|
 | List and search | `SearchBooksTest` | all books and field invariants, sorting, partial and case-insensitive title/author search, combined filters, `available=true/false`, no matches, parameter validation (length, type) |
-| Get a book | `GetBookTest` | existing book, 404 for an unknown ID, 400 for non-integer and non-positive IDs |
-| Borrow | `BorrowBooksTest` | one book, several books in request order, the last copy, all-or-nothing on 409, every unavailable/unknown ID listed, 404 before 409, 14 kinds of invalid request body |
+| Get a book | `GetBookTest` | existing book is returned without `author` (`BookInfo`), 404 for an unknown ID, 400 for non-integer and non-positive IDs |
+| Borrow | `BorrowBooksTest` | one book per request, `borrowed` as a single object, the last copy, 404/409 business errors, legacy `bookIds` rejection, invalid request bodies |
 | Return | `ReturnBookTest` | return a borrowed copy, 409 when all copies are in, 404, 400 |
 | Lifecycle | `BookLifecycleTest` | borrow every copy → 409 → return every copy → 409, book back to its original state |
 | Service endpoints | `ApiDocumentationTest` | OpenAPI spec is served, Swagger UI, health |
@@ -69,13 +69,13 @@ src/test/java/com/qic/library/tests
     ├── client/                 LibraryClient (API calls as Allure steps), InventoryTracker
     ├── fixtures/               BookFixtures (find or prepare books in a given state)
     ├── assertions/             ProblemAssertions (RFC 7807 errors)
-    ├── model/                  Book, BorrowRequest, BorrowResponse, Problem, Violation, ErrorCode
+    ├── model/                  Book, BookInfo, BorrowRequest, BorrowResponse, Problem, Violation, ErrorCode
     ├── http/                   RequestSpecs, ContractValidation, Json
     ├── config/                 TestConfig
     └── support/                Inventory (lock name), ServiceHealth
 ```
 
-`LibraryClient` has two kinds of methods: raw ones (`listBooks`, `getBook`, `postBorrow`, `returnBook`) return the `Response` and assert nothing, for the request under test; typed ones (`listAllBooks`, `fetchBook`, `borrow`, `returnCopy`) expect `200` and return parsed objects, for preparation and follow-up checks.
+`LibraryClient` has two kinds of methods: raw ones (`listBooks`, `getBook`, `postBorrow`, `returnBook`) return the `Response` and assert nothing, for the request under test; typed ones (`listAllBooks`, `fetchBookInfo`, `borrow`, `returnCopy`) expect `200` and return parsed objects, for preparation and follow-up checks.
 
 ## CI
 
@@ -88,5 +88,5 @@ All fixed in the service; kept here as a record of what the tests guard against.
 | Found by | Problem | Fix in the service |
 |---|---|---|
 | Contract validation (every test that reads books) | Books without an ISBN were returned with `"isbn": null`; the spec allows the field to be absent, not null | `spring.jackson.default-property-inclusion: non_null` |
-| `BorrowBooksTest` › null ID | `{"bookIds":[null]}` → 500 (NullPointerException) | `BookService` rejects null IDs with 400 `VALIDATION_ERROR` |
-| `BorrowBooksTest` › fractional ID | `{"bookIds":[1.5]}` → 200, book 1 borrowed (1.5 truncated to 1) | `spring.jackson.deserialization.accept-float-as-int: false` → 400 |
+| `BorrowBooksTest` › null ID | `{"bookId":null}` → 500 (NullPointerException) | `BookService` rejects null IDs with 400 `VALIDATION_ERROR` |
+| `BorrowBooksTest` › fractional ID | `{"bookId":1.5}` → 200, book 1 borrowed (1.5 truncated to 1) | `spring.jackson.deserialization.accept-float-as-int: false` → 400 |

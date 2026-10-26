@@ -1,11 +1,8 @@
 package com.qic.library.tests.framework.model;
 
-import java.util.Arrays;
-import java.util.List;
+public record BorrowRequest(Long bookId) {
 
-public record BorrowRequest(List<Long> bookIds) {
-
-    public static BorrowRequest of(Long... bookIds) {
-        return new BorrowRequest(Arrays.asList(bookIds));
+    public static BorrowRequest of(Long bookId) {
+        return new BorrowRequest(bookId);
     }
 }

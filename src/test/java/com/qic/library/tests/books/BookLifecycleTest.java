@@ -2,6 +2,7 @@ package com.qic.library.tests.books;
 
 import com.qic.library.tests.BaseApiTest;
 import com.qic.library.tests.framework.model.Book;
+import com.qic.library.tests.framework.model.BookInfo;
 import com.qic.library.tests.framework.model.ErrorCode;
 import com.qic.library.tests.framework.support.Inventory;
 import io.qameta.allure.Allure;
@@ -33,13 +34,13 @@ class BookLifecycleTest extends BaseApiTest {
         for (int copy = 1; copy <= total; copy++) {
             int expectedAvailable = total - copy;
             Allure.step("Borrow copy " + copy + " of " + total, () -> {
-                Book book = library.borrow(id).borrowed().get(0);
+                Book book = library.borrow(id).borrowed();
                 assertThat(book.availableCopies()).isEqualTo(expectedAvailable);
             });
         }
 
         Allure.step("No copies left: borrowing fails and the book isn't listed as available", () -> {
-            assertProblem(library.postBorrowIds(id), 409, ErrorCode.NO_COPIES_AVAILABLE);
+            assertProblem(library.postBorrowId(id), 409, ErrorCode.NO_COPIES_AVAILABLE);
             assertThat(library.searchBooks(null, null, true)).extracting(Book::id).doesNotContain(id);
         });
 
@@ -54,7 +55,7 @@ class BookLifecycleTest extends BaseApiTest {
 
         Allure.step("All copies are back: returning fails and the book matches its original state", () -> {
             assertProblem(library.returnBook(id), 409, ErrorCode.ALL_COPIES_RETURNED);
-            assertThat(library.fetchBook(id)).isEqualTo(original);
+            assertThat(library.fetchBookInfo(id)).isEqualTo(BookInfo.from(original));
         });
     }
 }

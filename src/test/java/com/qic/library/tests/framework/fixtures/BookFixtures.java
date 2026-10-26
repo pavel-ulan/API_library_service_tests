@@ -75,10 +75,11 @@ public class BookFixtures {
                 .filter(b -> b.availableCopies() >= available)
                 .min(Comparator.comparing(Book::availableCopies))
                 .orElseGet(() -> Assumptions.abort("No book with at least " + available + " available copies"));
+        Book current = book;
         for (int i = book.availableCopies(); i > available; i--) {
-            library.borrow(book.id());
+            current = library.borrow(book.id()).borrowed();
         }
-        return library.fetchBook(book.id());
+        return current;
     }
 
     /** An ID far above every existing one. */
