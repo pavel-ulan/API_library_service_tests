@@ -1,6 +1,7 @@
 target/
 allure-results/
 allure-report/
+.allure/
 
 # IntelliJ
 .idea/

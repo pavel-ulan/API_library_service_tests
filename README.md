@@ -81,11 +81,12 @@ src/test/java/com/qic/library/tests
 
 `.github/workflows/api-tests.yml` checks out this repo and the service repo, builds and starts the service, runs the tests and uploads the Allure report and raw results as artifacts. It runs on push to `main`, on pull requests and manually (with a choice of service branch). If the service repository is private, add a `SERVICE_REPO_TOKEN` secret with read access to it.
 
-## Known service defects
+## Service defects found by this suite
 
-These tests currently fail on purpose: they show real bugs in the service.
+All fixed in the service; kept here as a record of what the tests guard against.
 
-| Test case | Request | Expected | Actual |
-|---|---|---|---|
-| `BorrowBooksTest` › null ID | `{"bookIds":[null]}` | 400 `VALIDATION_ERROR` | 500 Internal Server Error (NullPointerException) |
-| `BorrowBooksTest` › fractional ID | `{"bookIds":[1.5]}` | 400 `VALIDATION_ERROR` | 200, book 1 is borrowed (Jackson truncates 1.5 to 1) |
+| Found by | Problem | Fix in the service |
+|---|---|---|
+| Contract validation (every test that reads books) | Books without an ISBN were returned with `"isbn": null`; the spec allows the field to be absent, not null | `spring.jackson.default-property-inclusion: non_null` |
+| `BorrowBooksTest` › null ID | `{"bookIds":[null]}` → 500 (NullPointerException) | `BookService` rejects null IDs with 400 `VALIDATION_ERROR` |
+| `BorrowBooksTest` › fractional ID | `{"bookIds":[1.5]}` → 200, book 1 borrowed (1.5 truncated to 1) | `spring.jackson.deserialization.accept-float-as-int: false` → 400 |

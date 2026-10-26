@@ -26,7 +26,7 @@
 
         <surefire.version>3.5.2</surefire.version>
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
-        <allure-maven.version>2.13.0</allure-maven.version>
+        <allure-maven.version>2.18.0</allure-maven.version>
     </properties>
 
     <dependencyManagement>
@@ -154,6 +154,8 @@
                 <configuration>
                     <reportVersion>${allure-report.version}</reportVersion>
                     <resultsDirectory>allure-results</resultsDirectory>
+                    <reportDirectory>${project.build.directory}/allure-report</reportDirectory>
+                    <singleFile>true</singleFile>
                 </configuration>
             </plugin>
         </plugins>
