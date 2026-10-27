@@ -4,7 +4,6 @@ import com.qic.library.tests.BaseApiTest;
 import com.qic.library.tests.framework.config.TestConfig;
 import com.qic.library.tests.framework.http.Json;
 import com.qic.library.tests.framework.model.Book;
-import com.qic.library.tests.framework.model.BookInfo;
 import com.qic.library.tests.framework.model.ErrorCode;
 import com.qic.library.tests.framework.model.Problem;
 import io.qameta.allure.Feature;
@@ -29,20 +28,21 @@ class GetBookTest extends BaseApiTest {
     @Test
     @Story("Get existing book")
     @Severity(SeverityLevel.BLOCKER)
-    @DisplayName("Returns the book without the author, using the BookInfo schema")
+    @DisplayName("Returns the complete book, including its author")
     void returnsBookById() {
         Book expected = books.anyBook();
 
         Response response = library.getBook(expected.id());
 
         assertThat(response.statusCode()).isEqualTo(200);
-        BookInfo actual = Json.read(response, BookInfo.class);
+        Book actual = Json.read(response, Book.class);
         assertThat(response.jsonPath().getMap("$"))
                 .as("GET /books/{bookId} response fields")
-                .doesNotContainKey("author");
+                .containsKey("author");
         // Counters may change in parallel tests between the two requests, so only static data is compared
         assertThat(actual.id()).isEqualTo(expected.id());
         assertThat(actual.title()).isEqualTo(expected.title());
+        assertThat(actual.author()).isEqualTo(expected.author());
         assertThat(actual.isbn()).isEqualTo(expected.isbn());
         assertThat(actual.publicationYear()).isEqualTo(expected.publicationYear());
         assertThat(actual.totalCopies()).isEqualTo(expected.totalCopies());

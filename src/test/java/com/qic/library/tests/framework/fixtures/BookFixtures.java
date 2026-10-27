@@ -77,7 +77,7 @@ public class BookFixtures {
                 .orElseGet(() -> Assumptions.abort("No book with at least " + available + " available copies"));
         Book current = book;
         for (int i = book.availableCopies(); i > available; i--) {
-            current = library.borrow(book.id()).borrowed();
+            current = library.borrow(book.id()).borrowed().getFirst();
         }
         return current;
     }

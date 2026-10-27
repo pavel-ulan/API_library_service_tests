@@ -34,7 +34,7 @@ class BookLifecycleTest extends BaseApiTest {
         for (int copy = 1; copy <= total; copy++) {
             int expectedAvailable = total - copy;
             Allure.step("Borrow copy " + copy + " of " + total, () -> {
-                Book book = library.borrow(id).borrowed();
+                Book book = library.borrow(id).borrowed().getFirst();
                 assertThat(book.availableCopies()).isEqualTo(expectedAvailable);
             });
         }

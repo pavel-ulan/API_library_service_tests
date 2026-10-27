@@ -8,7 +8,6 @@ import com.qic.library.tests.framework.model.BookInfo;
 import com.qic.library.tests.framework.model.BorrowResponse;
 import com.qic.library.tests.framework.model.ErrorCode;
 import com.qic.library.tests.framework.model.Problem;
-import com.qic.library.tests.framework.model.Violation;
 import com.qic.library.tests.framework.support.Inventory;
 import io.qameta.allure.Feature;
 import io.qameta.allure.Severity;
@@ -23,6 +22,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static com.qic.library.tests.framework.assertions.ProblemAssertions.assertInstance;
@@ -45,7 +45,7 @@ class BorrowBooksTest extends BaseApiTest {
     @Story("Borrow one book")
     @Severity(SeverityLevel.BLOCKER)
     @ResourceLock(Inventory.LOCK)
-    @DisplayName("Borrowing a book takes one copy and returns it as a single object")
+    @DisplayName("Borrowing one book takes one copy and returns a single-element list")
     void borrowsOneCopy() {
         Book before = books.withAvailableCopies(1);
 
@@ -53,7 +53,8 @@ class BorrowBooksTest extends BaseApiTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         BorrowResponse result = Json.read(response, BorrowResponse.class);
-        Book borrowed = result.borrowed();
+        assertThat(result.borrowed()).hasSize(1);
+        Book borrowed = result.borrowed().getFirst();
         assertThat(borrowed.id()).isEqualTo(before.id());
         assertThat(borrowed.availableCopies()).as("availableCopies").isEqualTo(before.availableCopies() - 1);
         assertThat(borrowed.totalCopies()).as("totalCopies").isEqualTo(before.totalCopies());
@@ -66,6 +67,36 @@ class BorrowBooksTest extends BaseApiTest {
     }
 
     @Test
+    @Story("Borrow several books")
+    @Severity(SeverityLevel.BLOCKER)
+    @ResourceLock(Inventory.LOCK)
+    @DisplayName("Borrows one copy of each requested book in request order")
+    void borrowsSeveralDifferentBooksAtomically() {
+        List<Book> before = books.differentAvailableBooks(2);
+        List<Long> requestedIds = before.stream().map(Book::id).toList();
+
+        BorrowResponse result = library.borrow(requestedIds);
+
+        assertThat(result.borrowed()).extracting(Book::id)
+                .as("borrowed book IDs")
+                .containsExactlyElementsOf(requestedIds);
+        for (int index = 0; index < before.size(); index++) {
+            Book original = before.get(index);
+            Book borrowed = result.borrowed().get(index);
+            assertThat(borrowed.availableCopies())
+                    .as("availableCopies for book %s", original.id())
+                    .isEqualTo(original.availableCopies() - 1);
+            assertThat(borrowed.totalCopies()).isEqualTo(original.totalCopies());
+            assertThat(borrowed).usingRecursiveComparison()
+                    .ignoringFields("availableCopies")
+                    .isEqualTo(original);
+            assertThat(library.fetchBookInfo(borrowed.id()))
+                    .as("stored state for book %s", borrowed.id())
+                    .isEqualTo(BookInfo.from(borrowed));
+        }
+    }
+
+    @Test
     @Story("Borrow one book")
     @Severity(SeverityLevel.CRITICAL)
     @ResourceLock(Inventory.LOCK)
@@ -73,7 +104,7 @@ class BorrowBooksTest extends BaseApiTest {
     void borrowingLastCopyMakesBookUnavailable() {
         Book book = books.withExactlyAvailableCopies(1);
 
-        Book borrowed = library.borrow(book.id()).borrowed();
+        Book borrowed = library.borrow(book.id()).borrowed().getFirst();
 
         assertThat(borrowed.availableCopies()).isZero();
         assertThat(library.searchBooks(null, null, true))
@@ -103,6 +134,25 @@ class BorrowBooksTest extends BaseApiTest {
     }
 
     @Test
+    @Story("No copies available")
+    @Severity(SeverityLevel.CRITICAL)
+    @ResourceLock(Inventory.LOCK)
+    @DisplayName("Does not borrow any requested book when one has no available copy")
+    void rejectsBatchWithUnavailableBookAtomically() {
+        Book unavailable = books.withNoAvailableCopies();
+        Book available = books.withAvailableCopies(1, unavailable.id());
+
+        Response response = library.postBorrowIds(List.of(available.id(), unavailable.id()));
+
+        Problem problem = assertProblem(response, 409, ErrorCode.NO_COPIES_AVAILABLE);
+        assertThat(problem.bookIds()).containsExactly(unavailable.id());
+        assertInstance(problem, BORROW_PATH);
+        assertThat(library.fetchBookInfo(available.id()))
+                .as("available book is untouched when the batch fails")
+                .isEqualTo(BookInfo.from(available));
+    }
+
+    @Test
     @Story("Unknown book")
     @Severity(SeverityLevel.CRITICAL)
     @ResourceLock(Inventory.LOCK)
@@ -117,36 +167,72 @@ class BorrowBooksTest extends BaseApiTest {
         assertInstance(problem, BORROW_PATH);
     }
 
+    @Test
+    @Story("Unknown book")
+    @Severity(SeverityLevel.CRITICAL)
+    @ResourceLock(Inventory.LOCK)
+    @DisplayName("Lists all unknown IDs and does not borrow known books in a failed batch")
+    void rejectsBatchWithUnknownIdsAtomically() {
+        Book available = books.withAvailableCopies(1);
+        long firstUnknown = books.unknownBookId();
+        long secondUnknown = firstUnknown + 1;
+
+        Response response = library.postBorrowIds(List.of(available.id(), firstUnknown, secondUnknown));
+
+        Problem problem = assertProblem(response, 404, ErrorCode.BOOK_NOT_FOUND);
+        assertThat(problem.bookIds()).containsExactlyInAnyOrder(firstUnknown, secondUnknown);
+        assertInstance(problem, BORROW_PATH);
+        assertThat(library.fetchBookInfo(available.id()))
+                .as("known book is untouched when the batch fails")
+                .isEqualTo(BookInfo.from(available));
+    }
+
     // ---- Request validation ---------------------------------------------------------------
 
     @Test
     @Story("Validation")
     @Severity(SeverityLevel.CRITICAL)
     @ResourceLock(Inventory.LOCK)
-    @DisplayName("Rejects the legacy bookIds request with bookId: must not be null")
-    void rejectsLegacyBookIdsRequest() {
-        Response response = library.postBorrow("{\"bookIds\":[1]}");
+    @DisplayName("Rejects the legacy bookId request")
+    void rejectsLegacyBookIdRequest() {
+        Response response = library.postBorrow("{\"bookId\":1}");
 
         Problem problem = assertProblem(response, 400, ErrorCode.VALIDATION_ERROR);
         assertInstance(problem, BORROW_PATH);
-        assertViolationOn(problem, "bookId");
-        assertThat(problem.violations())
-                .filteredOn(violation -> "bookId".equals(violation.field()))
-                .extracting(Violation::message)
-                .contains("must not be null");
+        assertViolationOn(problem, "bookIds");
+    }
+
+    @Test
+    @Story("Validation")
+    @Severity(SeverityLevel.CRITICAL)
+    @ResourceLock(Inventory.LOCK)
+    @DisplayName("Rejects duplicate book IDs without changing inventory")
+    void rejectsDuplicateBookIds() {
+        Book before = books.withAvailableCopies(1);
+
+        Response response = library.postBorrowIds(List.of(before.id(), before.id()));
+
+        Problem problem = assertProblem(response, 400, ErrorCode.VALIDATION_ERROR);
+        assertInstance(problem, BORROW_PATH);
+        assertViolationOn(problem, "bookIds");
+        assertThat(library.fetchBookInfo(before.id()))
+                .as("book is untouched")
+                .isEqualTo(BookInfo.from(before));
     }
 
     static Stream<Arguments> invalidRequests() {
         return Stream.of(
-                arguments("missing bookId", "{}", "bookId"),
-                arguments("bookId is null", "{\"bookId\":null}", "bookId"),
-                arguments("bookId is 0", "{\"bookId\":0}", "bookId"),
-                arguments("negative bookId", "{\"bookId\":-5}", "bookId"),
-                arguments("fractional bookId", "{\"bookId\":1.5}", null),
-                arguments("bookId is a string", "{\"bookId\":\"abc\"}", null),
-                arguments("bookId is an array", "{\"bookId\":[1]}", null),
+                arguments("missing bookIds", "{}", "bookIds"),
+                arguments("bookIds is null", "{\"bookIds\":null}", "bookIds"),
+                arguments("bookIds is empty", "{\"bookIds\":[]}", "bookIds"),
+                arguments("more than ten bookIds", "{\"bookIds\":[1,2,3,4,5,6,7,8,9,10,11]}", "bookIds"),
+                arguments("bookIds contains zero", "{\"bookIds\":[0]}", null),
+                arguments("bookIds contains a negative ID", "{\"bookIds\":[-5]}", null),
+                arguments("bookIds contains a fractional ID", "{\"bookIds\":[1.5]}", null),
+                arguments("bookIds contains a string", "{\"bookIds\":[\"abc\"]}", null),
+                arguments("bookIds is not an array", "{\"bookIds\":1}", null),
                 arguments("body is an array", "[1]", null),
-                arguments("malformed JSON", "{\"bookId\":", null),
+                arguments("malformed JSON", "{\"bookIds\":", null),
                 arguments("empty body", "", null));
     }
 

@@ -63,6 +63,10 @@ public class LibraryClient {
                 .when().post("/books/borrow");
     }
 
+    public Response postBorrowIds(List<Long> bookIds) {
+        return postBorrow(BorrowRequest.of(bookIds));
+    }
+
     /** Named differently from {@link #postBorrow(Object)} so a Long never binds to the raw overload. */
     public Response postBorrowId(Long bookId) {
         return postBorrow(BorrowRequest.of(bookId));
@@ -101,7 +105,11 @@ public class LibraryClient {
     }
 
     public BorrowResponse borrow(long bookId) {
-        return Json.read(expectOk(postBorrowId(bookId)), BorrowResponse.class);
+        return borrow(List.of(bookId));
+    }
+
+    public BorrowResponse borrow(List<Long> bookIds) {
+        return Json.read(expectOk(postBorrowIds(bookIds)), BorrowResponse.class);
     }
 
     public Book returnCopy(long bookId) {

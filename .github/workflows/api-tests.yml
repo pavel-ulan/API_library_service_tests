@@ -28,11 +28,24 @@ jobs:
         with:
           path: tests
 
+      - name: Select service revision
+        id: service-ref
+        shell: bash
+        env:
+          REQUESTED_REF: ${{ inputs.service_ref }}
+        run: |
+          ref="$REQUESTED_REF"
+          if [ -z "$ref" ] && [[ "$GITHUB_HEAD_REF" == agent/openapi-* ]] && [ -f tests/.github/agent-service-ref.txt ]; then
+            ref=$(cat tests/.github/agent-service-ref.txt)
+            [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          fi
+          echo "ref=${ref:-main}" >> "$GITHUB_OUTPUT"
+
       - name: Check out service
         uses: actions/checkout@v4
         with:
           repository: ${{ env.SERVICE_REPO }}
-          ref: ${{ inputs.service_ref || 'main' }}
+          ref: ${{ steps.service-ref.outputs.ref }}
           path: service
           token: ${{ secrets.SERVICE_REPO_TOKEN || github.token }}
 
@@ -78,7 +91,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
-          path: tests/target/site/allure-maven-plugin
+          path: tests/target/allure-report
           if-no-files-found: warn
 
       - name: Upload Allure results and service log

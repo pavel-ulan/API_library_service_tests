@@ -34,7 +34,7 @@ public class InventoryTracker implements Filter {
             String path = URI.create(request.getURI()).getPath();
             if (path.endsWith("/books/borrow")) {
                 BorrowResponse body = Json.read(response.asString(), BorrowResponse.class);
-                outstanding.merge(body.borrowed().id(), 1, Integer::sum);
+                body.borrowed().forEach(book -> outstanding.merge(book.id(), 1, Integer::sum));
             } else {
                 Matcher matcher = RETURN_PATH.matcher(path);
                 if (matcher.matches()) {
