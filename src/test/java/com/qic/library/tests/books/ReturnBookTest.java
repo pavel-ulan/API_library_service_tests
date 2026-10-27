@@ -4,7 +4,6 @@ import com.qic.library.tests.BaseApiTest;
 import com.qic.library.tests.framework.config.TestConfig;
 import com.qic.library.tests.framework.http.Json;
 import com.qic.library.tests.framework.model.Book;
-import com.qic.library.tests.framework.model.BookInfo;
 import com.qic.library.tests.framework.model.ErrorCode;
 import com.qic.library.tests.framework.model.Problem;
 import com.qic.library.tests.framework.support.Inventory;
@@ -42,9 +41,9 @@ class ReturnBookTest extends BaseApiTest {
         assertThat(response.statusCode()).isEqualTo(200);
         Book returned = Json.read(response, Book.class);
         assertThat(returned).as("book after borrow + return").isEqualTo(original);
-        assertThat(library.fetchBookInfo(original.id()))
+        assertThat(library.fetchBook(original.id()))
                 .as("stored book")
-                .isEqualTo(BookInfo.from(original));
+                .isEqualTo(original);
     }
 
     @Test
@@ -60,9 +59,9 @@ class ReturnBookTest extends BaseApiTest {
         Problem problem = assertProblem(response, 409, ErrorCode.ALL_COPIES_RETURNED);
         assertThat(problem.bookIds()).containsExactly(book.id());
         assertInstance(problem, TestConfig.apiBasePath() + "/books/" + book.id() + "/return");
-        assertThat(library.fetchBookInfo(book.id()))
+        assertThat(library.fetchBook(book.id()))
                 .as("book is untouched")
-                .isEqualTo(BookInfo.from(book));
+                .isEqualTo(book);
     }
 
     @Test

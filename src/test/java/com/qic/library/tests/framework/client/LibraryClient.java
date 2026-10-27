@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.qic.library.tests.framework.http.Json;
 import com.qic.library.tests.framework.http.RequestSpecs;
 import com.qic.library.tests.framework.model.Book;
-import com.qic.library.tests.framework.model.BookInfo;
 import com.qic.library.tests.framework.model.BorrowRequest;
 import com.qic.library.tests.framework.model.BorrowResponse;
 import io.qameta.allure.Step;
@@ -25,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <ul>
  *   <li>Methods returning {@link Response} send exactly what they're given and assert nothing:
  *       use them for the request under test, including invalid input.</li>
- *   <li>Typed methods ({@code listAllBooks}, {@code fetchBookInfo}, {@code borrow}, {@code returnCopy}) expect
+ *   <li>Typed methods ({@code listAllBooks}, {@code fetchBook}, {@code borrow}, {@code returnCopy}) expect
  *       {@code 200} and return the parsed body: use them for preconditions and follow-up checks.</li>
  * </ul>
  */
@@ -36,8 +35,6 @@ public class LibraryClient {
     public LibraryClient(Filter... extraFilters) {
         this.spec = RequestSpecs.api(extraFilters);
     }
-
-    // ---- Raw requests ----------------------------------------------------------------------
 
     @Step("GET /books {query}")
     public Response listBooks(Map<String, ?> query) {
@@ -63,6 +60,10 @@ public class LibraryClient {
                 .when().post("/books/borrow");
     }
 
+    public Response postBorrowIds(List<Long> bookIds) {
+        return postBorrow(BorrowRequest.of(bookIds));
+    }
+
     /** Named differently from {@link #postBorrow(Object)} so a Long never binds to the raw overload. */
     public Response postBorrowId(Long bookId) {
         return postBorrow(BorrowRequest.of(bookId));
@@ -74,8 +75,6 @@ public class LibraryClient {
                 .pathParam("bookId", bookId)
                 .when().post("/books/{bookId}/return");
     }
-
-    // ---- Typed helpers ---------------------------------------------------------------------
 
     public List<Book> searchBooks(String title, String author, Boolean available) {
         Map<String, Object> query = new LinkedHashMap<>();
@@ -96,12 +95,16 @@ public class LibraryClient {
         return searchBooks(null, null, null);
     }
 
-    public BookInfo fetchBookInfo(long bookId) {
-        return Json.read(expectOk(getBook(bookId)), BookInfo.class);
+    public Book fetchBook(long bookId) {
+        return Json.read(expectOk(getBook(bookId)), Book.class);
     }
 
     public BorrowResponse borrow(long bookId) {
         return Json.read(expectOk(postBorrowId(bookId)), BorrowResponse.class);
+    }
+
+    public BorrowResponse borrow(List<Long> bookIds) {
+        return Json.read(expectOk(postBorrowIds(bookIds)), BorrowResponse.class);
     }
 
     public Book returnCopy(long bookId) {

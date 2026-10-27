@@ -2,7 +2,6 @@ package com.qic.library.tests.books;
 
 import com.qic.library.tests.BaseApiTest;
 import com.qic.library.tests.framework.model.Book;
-import com.qic.library.tests.framework.model.BookInfo;
 import com.qic.library.tests.framework.model.ErrorCode;
 import com.qic.library.tests.framework.support.Inventory;
 import io.qameta.allure.Allure;
@@ -34,7 +33,7 @@ class BookLifecycleTest extends BaseApiTest {
         for (int copy = 1; copy <= total; copy++) {
             int expectedAvailable = total - copy;
             Allure.step("Borrow copy " + copy + " of " + total, () -> {
-                Book book = library.borrow(id).borrowed();
+                Book book = library.borrow(id).borrowed().getFirst();
                 assertThat(book.availableCopies()).isEqualTo(expectedAvailable);
             });
         }
@@ -55,7 +54,7 @@ class BookLifecycleTest extends BaseApiTest {
 
         Allure.step("All copies are back: returning fails and the book matches its original state", () -> {
             assertProblem(library.returnBook(id), 409, ErrorCode.ALL_COPIES_RETURNED);
-            assertThat(library.fetchBookInfo(id)).isEqualTo(BookInfo.from(original));
+            assertThat(library.fetchBook(id)).isEqualTo(original);
         });
     }
 }
